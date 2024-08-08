@@ -1,0 +1,162 @@
+class PolyZone {
+  constructor(polygons) {
+    this.polygons = polygons; // Array von Polygonen
+    this.activePolygons = new Set(); // Set der aktiven (betretenen) Polygone
+  }
+
+  // Methode, um zu prüfen, ob ein Punkt innerhalb eines Polygons liegt
+  isPointInPolygon(point, polygon) {
+    function isLeft(P0, P1, P2) {
+      return ((P1.x - P0.x) * (P2.y - P0.y) - (P2.x - P0.x) * (P1.y - P0.y));
+    }
+
+    let wn = 0; // winding number counter
+
+    // loop through all edges of the polygon
+    for (let i = 0; i < polygon.points.length; i++) {
+      let P0 = polygon.points[i];
+      let P1 = polygon.points[(i + 1) % polygon.points.length];
+
+      if (P0.y <= point.y) {
+        if (P1.y > point.y) { // an upward crossing
+          if (isLeft(P0, P1, point) > 0) { // point is left of edge
+            wn++;
+          }
+        }
+      } else {
+        if (P1.y <= point.y) { // a downward crossing
+          if (isLeft(P0, P1, point) < 0) { // point is right of edge
+            wn--;
+          }
+        }
+      }
+    }
+
+    return wn !== 0;
+  }
+
+  // Methode, um zu prüfen, ob ein Polygon innerhalb eines anderen Polygons liegt
+  isPolygonInPolygon(innerPolygon, outerPolygon) {
+    for (let i = 0; i < innerPolygon.points.length; i++) {
+      if (!this.isPointInPolygon(innerPolygon.points[i], outerPolygon)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // Methode, um verschachtelte Polygone zu ermitteln
+  findNestedPolygons() {
+    let nestedPolygons = [];
+    for (let i = 0; i < this.polygons.length; i++) {
+      for (let j = 0; j < this.polygons.length; j++) {
+        if (i !== j && this.isPolygonInPolygon(this.polygons[i], this.polygons[j])) {
+          nestedPolygons.push({ child: this.polygons[i], parent: this.polygons[j] });
+        }
+      }
+    }
+    return nestedPolygons;
+  }
+
+  // Methode, um zu prüfen, welche Polygone ein Punkt betritt oder verlässt
+  checkPlayerPoint(playerPoint) {
+    let enteredPolygons = [];
+    let exitedPolygons = [];
+
+    for (let i = 0; i < this.polygons.length; i++) {
+      let polygon = this.polygons[i];
+      let inside = this.isPointInPolygon(playerPoint, polygon);
+
+      if (inside && !this.activePolygons.has(polygon)) {
+        enteredPolygons.push(polygon);
+        this.activePolygons.add(polygon);
+      } else if (!inside && this.activePolygons.has(polygon)) {
+        exitedPolygons.push(polygon);
+        this.activePolygons.delete(polygon);
+      }
+    }
+
+    return { enteredPolygons, exitedPolygons };
+  }
+
+  // Methode, um Events zu melden
+  handleEvents(playerPoint) {
+    let { enteredPolygons, exitedPolygons } = this.checkPlayerPoint(playerPoint);
+
+    enteredPolygons.forEach(polygon => {
+      console.log(`Entered Polygon ID: ${polygon.id}, Data: ${JSON.stringify(polygon.data)}`);
+      let parentPolygon = this.getParentPolygon(polygon);
+      if (parentPolygon) {
+        console.log(`Parent Polygon ID: ${parentPolygon.id}, Data: ${JSON.stringify(parentPolygon.data)}`);
+      }
+    });
+
+    exitedPolygons.forEach(polygon => {
+      console.log(`Exited Polygon ID: ${polygon.id}, Data: ${JSON.stringify(polygon.data)}`);
+      let parentPolygon = this.getParentPolygon(polygon);
+      if (parentPolygon) {
+        console.log(`Parent Polygon ID: ${parentPolygon.id}, Data: ${JSON.stringify(parentPolygon.data)}`);
+      }
+    });
+
+    this.activePolygons.forEach(polygon => {
+      console.log(`Currently inside Polygon ID: ${polygon.id}, Data: ${JSON.stringify(polygon.data)}`);
+    });
+  }
+
+  // Methode, um das übergeordnete Polygon zu finden
+  getParentPolygon(polygon) {
+    for (let i = 0; i < this.polygons.length; i++) {
+      if (this.polygons[i] !== polygon && this.isPolygonInPolygon(polygon, this.polygons[i])) {
+        return this.polygons[i];
+      }
+    }
+    return null;
+  }
+}
+
+// Beispiel-Polygone mit IDs und zufälligen Daten
+let polygons = [
+  {
+    id: 1,
+    points: [
+      { "x": 299.04132080078, "y": -1350.3809814453 },
+      { "x": 294.47015380859, "y": -1355.0686035156 },
+      { "x": 285.49755859375, "y": -1347.5473632812 },
+      { "x": 298.36239624023, "y": -1349.8017578125 }
+    ],
+    data: { name: "Zone A", type: "residential", population: 100 }
+  },
+  {
+    id: 2,
+    points: [
+      { "x": 300.0, "y": -1352.0 },
+      { "x": 295.0, "y": -1357.0 },
+      { "x": 290.0, "y": -1349.0 },
+      { "x": 300.0, "y": -1350.0 }
+    ],
+    data: { name: "Zone B", type: "commercial", population: 50 }
+  }
+];
+
+let playerPoints = [
+  { "x": 289.239563, "y": -1346.268188 }, // out
+  { "x": 292.813202, "y": -1351.094482 }, // in
+  { "x": 295.0, "y": -1351.5 }, // schnitt
+  { "x": 295.0, "y": -1351.5 }  // schnitt
+];
+
+let polyZone = new PolyZone(polygons);
+
+// Funktion, um die Position kontinuierlich zu überprüfen
+function monitorPlayerPosition(playerPoint) {
+  setInterval(() => {
+    polyZone.handleEvents(playerPoint);
+  }, 1000); // Überprüfung alle 1000ms (1 Sekunde)
+}
+
+// Startet die Überwachung der Positionen
+playerPoints.forEach((playerPoint, index) => {
+  console.log(`Monitoring playerPoint ${index + 1}:`, playerPoint);
+  monitorPlayerPosition(playerPoint);
+});
